@@ -1,8 +1,11 @@
-int cnt = 0;
+const bool DEBUG = false;
 const int ohm_RGB[] = { 100, 100, 100 };
 float voltR[3], voltG[2], voltB;
 float mA_RGB[3];
 float mean_mA_RGB[3];
+int ratio_RGB[3] = { 0 };
+int i_ratio_input = 0;
+
 float ohm_vr;
 int PIN_Rin[] = { A0, A1, A2 };
 int PIN_Gin[] = { A3, A4 };
@@ -19,12 +22,9 @@ void setup() {
   for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
     pinMode(PIN_RGBout[i_rgb], OUTPUT);
   }
-}
 
-void loop() {
-  sprintf(str, "cnt: %d", cnt);
-  Serial.println(str);
-  if (cnt < 5) {
+  // 各LEDに電流を流す（5回）
+  for (int cnt = 0; cnt < 5; ++cnt) {
     // when off:
     Serial.println("OFF:");
     for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
@@ -43,90 +43,130 @@ void loop() {
       mean_mA_RGB[i_rgb] += mA_RGB[i_rgb];
     }
     delay(1000);
-  } else if (cnt == 5) {
-    // calculate average current
-    for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
-      mean_mA_RGB[i_rgb] /= 5;
-    }
-    // display mean current
-    for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
-      dtostrf(mean_mA_RGB[i_rgb], 5, 2, buf_mA_RGB[i_rgb]);
-    }
-    sprintf(str, "---mean current of RGB: %smA %smA %smA---", buf_mA_RGB[0], buf_mA_RGB[1], buf_mA_RGB[2]);
-    Serial.println(str);
-  } else {
-    // reset
-    for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
-      digitalWrite(PIN_RGBout[i_rgb], LOW);
-    }
-    int ratio_RGB[3] = { 0 };
-    // R-LED, G-LED, B-LED単体のとき（各々15mAの電流を流す）
-    for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
-      // calculate
-      ratio_RGB[i_rgb] = 255 * 15.0 / mean_mA_RGB[i_rgb];
-      if (ratio_RGB[i_rgb] > 255) {
-        ratio_RGB[i_rgb] = 255;
-      }
-      // lightup
-      lightup(ratio_RGB, 2000);
-      // reset
-      ratio_RGB[i_rgb] = 0;
-    }
-
-
-
-    // PDを使う場合の最適値（R+G:B=0.25:0.37)
-    for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
-      // calculate
-      switch (i_rgb) {
-        case 0:
-          ratio_RGB[0] = 255 * 15.0 / mean_mA_RGB[0];
-          break;
-        case 1:
-          ratio_RGB[1] = 255 * 15.0 * 5.865873551 / 7.0 / mean_mA_RGB[1];
-          break;
-        case 2:
-          ratio_RGB[2] = 255 * 15.0 * (2 * 0.37 / 0.25 * 0.610694143) / 2.5 / mean_mA_RGB[1];
-          break;
-      }
-      if (ratio_RGB[i_rgb] > 255) {
-        ratio_RGB[i_rgb] = 255;
-      }
-      // lightup
-      lightup(ratio_RGB, 2000);
-      // reset
-      ratio_RGB[i_rgb] = 0;
-    }
-
-
-    // R-LEDとG-LEDを混ぜ合わせたとき
-    // calculate
-    for (int i_ratio = 0; i_ratio < 21; ++i_ratio) {
-      ratio_RGB[0] = 255 * 15.0 / mean_mA_RGB[0] * (float)i_ratio / 20.0;
-      ratio_RGB[1] = 255 * 15.0 * 5.865873551 / 7.0 / mean_mA_RGB[1] * (float)(20 - i_ratio) / 20.0;
-      // lightup
-      lightup(ratio_RGB, 2000);
-    }
-    // reset
-    ratio_RGB[0] = 0;
-    ratio_RGB[1] = 0;
-    
-    
-    // R-LED, G-LED, B-LEDを混ぜ合わせたとき
-    // calculate
-    ratio_RGB[2] = 255 * 15.0 * (1 * 0.37 / 0.25 * 0.610694143) / 2.5 / mean_mA_RGB[1];
-    for (int i_ratio = 0; i_ratio < 21; ++i_ratio) {
-      ratio_RGB[0] = 255 * 15.0 / mean_mA_RGB[0] * (float)i_ratio / 20.0;
-      ratio_RGB[1] = 255 * 15.0 * 5.865873551 / 7.0 / mean_mA_RGB[1] * (float)(20 - i_ratio) / 20.0;
-      // lightup
-      lightup(ratio_RGB, 2000);
-    }
-    // reset
-    ratio_RGB[0] = 0;
-    ratio_RGB[1] = 0;
-    ratio_RGB[2] = 0;
   }
-  ++cnt;
+  // 各LEDにデフォルトで流れる電流を導出（平均値から）
+  for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
+    mean_mA_RGB[i_rgb] /= 5;
+  }
+
+  // display mean current
+  for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
+    dtostrf(mean_mA_RGB[i_rgb], 5, 2, buf_mA_RGB[i_rgb]);
+  }
+  sprintf(str, "---mean current of RGB: %smA %smA %smA---", buf_mA_RGB[0], buf_mA_RGB[1], buf_mA_RGB[2]);
+  Serial.println(str);
+
+
+  if (!DEBUG) {
+    return;
+  }
+  // R-LED, G-LED, B-LED単体のとき（各々15mAの電流を流す）
+  for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
+    // calculate
+    if (i_rgb == 0) {
+      ratio_RGB[i_rgb] = 255 * 16.0 / mean_mA_RGB[i_rgb];
+    } else {
+      ratio_RGB[i_rgb] = 255 * 15.0 / mean_mA_RGB[i_rgb];
+    }
+    if (ratio_RGB[i_rgb] > 255) {
+      ratio_RGB[i_rgb] = 255;
+    }
+    // lightup
+    lightup(2000);
+    // reset
+    ratio_RGB[i_rgb] = 0;
+  }
+
+
+  // PDを使う場合の最適値（R+G:B=0.25:0.37)
+  for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
+    // calculate
+    switch (i_rgb) {
+      case 0:
+        ratio_RGB[0] = 255 * 16.0 / mean_mA_RGB[0];
+        break;
+      case 1:
+        ratio_RGB[1] = 255 * 15.0 / mean_mA_RGB[1] * 5.865873551 / 7.0;
+        break;
+      case 2:
+        ratio_RGB[2] = 255 * 15.0 / mean_mA_RGB[2] * (2 * 0.37 / 0.25 * 0.610694143) / 2.5;
+        break;
+    }
+    if (ratio_RGB[i_rgb] > 255) {
+      ratio_RGB[i_rgb] = 255;
+    }
+    // lightup
+    lightup(2000);
+    // reset
+    ratio_RGB[i_rgb] = 0;
+  }
+
+
+  // R-LEDとG-LEDを混ぜ合わせたとき
+  Serial.println("----R-LED + G-LED----");
+  // calculate
+  for (int i_ratio = 0; i_ratio < 21; ++i_ratio) {
+    sprintf(str, "ratio of R-LED: %d/20", i_ratio);
+    Serial.println(str);
+    ratio_RGB[0] = 255 * 16.0 / mean_mA_RGB[0] * (float)i_ratio / 20.0;
+    ratio_RGB[1] = 255 * 15.0 / mean_mA_RGB[1] * 5.865873551 / 7.0 * (float)(20 - i_ratio) / 20.0;
+    // lightup
+    lightup(1000);
+  }
+
+
+  // R-LED, G-LED, B-LEDを混ぜ合わせたとき
+  Serial.println("----R-LED + G-LED + B-LED----");
+  // calculate
+  ratio_RGB[2] = 255 * 15.0 / mean_mA_RGB[2] * (1 * 0.37 / 0.25 * 0.610694143) / 2.5;
+  for (int i_ratio = 0; i_ratio < 21; ++i_ratio) {
+    sprintf(str, "ratio of R-LED: %d/20", i_ratio);
+    Serial.println(str);
+    ratio_RGB[0] = 255 * 16.0 / mean_mA_RGB[0] * (float)i_ratio / 20.0;
+    ratio_RGB[1] = 255 * 15.0 / mean_mA_RGB[1] * 5.865873551 / 7.0 * (float)(20 - i_ratio) / 20.0;
+    // lightup
+    lightup(1000);
+  }
+  Serial.println("input something... (+: increase R-LED ratio, -: decrease R-LED ratio, y: Y-LED mode, w: W-LED mode)");
+}
+
+
+
+
+
+
+void loop() {
+  if (Serial.available() > 0) {
+    char val;
+    val = Serial.read();
+    if (val == '+') {
+      i_ratio_input = (i_ratio_input + 1) % 21;
+    } else if (val == '-') {
+      i_ratio_input = (i_ratio_input + 20) % 21;
+    } else if (val == 'y') {
+
+      ratio_RGB[2] = 0;
+    } else if (val == 'w') {
+      ratio_RGB[2] = 255 * 15.0 / mean_mA_RGB[2] * (1 * 0.37 / 0.25 * 0.610694143) / 2.5;
+    } else {
+      goto DELAY;
+    }
+    // calculate
+    ratio_RGB[0] = 255 * 16.0 / mean_mA_RGB[0] * (float)i_ratio_input / 20.0;
+    ratio_RGB[1] = 255 * 15.0 / mean_mA_RGB[1] * 5.865873551 / 7.0 * (float)(20 - i_ratio_input) / 20.0;
+    // display
+    sprintf(str, "input char: %c, ratio of R-LED: %d/20", val, i_ratio_input);
+    Serial.println(str);
+    // lightup
+    lightup(100);
+    Serial.println("---input something... (+: increase R-LED ratio, -: decrease R-LED ratio, y: Y-LED mode, w: W-LED mode)---");
+    // clear
+    // while (Serial.available() > 0) {
+    //   char tmp = Serial.read();
+    // }
+  }
+DELAY:
+  delay(1000);
 }
 
 void read() {
@@ -160,7 +200,7 @@ void read() {
   Serial.println(str);
 }
 
-void lightup(int ratio_RGB[], int time_delay) {
+void lightup(int time_delay) {
   for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
     // write
     analogWrite(PIN_RGBout[i_rgb], ratio_RGB[i_rgb]);
@@ -170,7 +210,4 @@ void lightup(int ratio_RGB[], int time_delay) {
   Serial.println(str);
   // prepare for next action
   delay(time_delay);
-  for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
-    digitalWrite(PIN_RGBout[i_rgb], LOW);
-  }
 };
