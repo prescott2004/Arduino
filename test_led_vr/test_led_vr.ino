@@ -5,19 +5,26 @@ float mA_RGB[3];
 float mean_mA_RGB[3];
 int ratio_RGB[3] = { 0 };
 int i_ratio_input = 0;
-
 float ohm_vr;
+
+// 使うピンの番号
 int PIN_Rin[] = { A0, A1, A2 };
 int PIN_Gin[] = { A3, A4 };
 int PIN_Bin = A5;
 int PIN_RGBout[] = { 9, 10, 11 };
 
+// additional LED
+int subratio_GB[2] = { 0 };
+int subPIN_GBout[2] = { 5, 6 };
+
+// バッファ
 char buf_voltR[3][20], buf_voltG[2][20], buf_voltB[20];
 char buf_mA_RGB[3][20];
 char buf_ohm_vr[20];
 char str[80];
+
+// put your setup code here, to run once:
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(9600);
   for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
     pinMode(PIN_RGBout[i_rgb], OUTPUT);
@@ -56,6 +63,13 @@ void setup() {
   sprintf(str, "---mean current of RGB: %smA %smA %smA---", buf_mA_RGB[0], buf_mA_RGB[1], buf_mA_RGB[2]);
   Serial.println(str);
 
+  // 2つ目のG-LEDを光らせる
+  for (int i_gb = 0; i_gb < 2; ++i_gb) {
+    pinMode(subPIN_GBout[i_gb], OUTPUT);
+  }
+  subratio_GB[0] = 255 * 15.0 / mean_mA_RGB[1];
+  subratio_GB[1] = 0;
+  lightup_sub(1000);
 
   if (!DEBUG) {
     return;
@@ -67,9 +81,6 @@ void setup() {
       ratio_RGB[i_rgb] = 255 * 16.0 / mean_mA_RGB[i_rgb];
     } else {
       ratio_RGB[i_rgb] = 255 * 15.0 / mean_mA_RGB[i_rgb];
-    }
-    if (ratio_RGB[i_rgb] > 255) {
-      ratio_RGB[i_rgb] = 255;
     }
     // lightup
     lightup(2000);
@@ -91,9 +102,6 @@ void setup() {
       case 2:
         ratio_RGB[2] = 255 * 15.0 / mean_mA_RGB[2] * (2 * 0.37 / 0.25 * 0.610694143) / 2.5;
         break;
-    }
-    if (ratio_RGB[i_rgb] > 255) {
-      ratio_RGB[i_rgb] = 255;
     }
     // lightup
     lightup(2000);
@@ -131,39 +139,72 @@ void setup() {
 }
 
 
-
-
-
-
 void loop() {
   if (Serial.available() > 0) {
     char val;
+    bool flg = false;
     val = Serial.read();
-    if (val == '+') {
-      i_ratio_input = (i_ratio_input + 1) % 21;
-    } else if (val == '-') {
-      i_ratio_input = (i_ratio_input + 20) % 21;
-    } else if (val == 'y') {
-
-      ratio_RGB[2] = 0;
-    } else if (val == 'w') {
-      ratio_RGB[2] = 255 * 15.0 / mean_mA_RGB[2] * (1 * 0.37 / 0.25 * 0.610694143) / 2.5;
-    } else {
-      goto DELAY;
+    switch (val) {
+      // 混色
+      case '+':
+        i_ratio_input = (i_ratio_input + 1) % 21;
+        flg = true;
+        break;
+      case '-':
+        i_ratio_input = (i_ratio_input + 20) % 21;
+        flg = true;
+        break;
+      case 'y':
+        ratio_RGB[2] = 0;
+        flg = true;
+        break;
+      case 'w':
+        ratio_RGB[2] = 255 * 15.0 / mean_mA_RGB[2] * (1 * 0.37 / 0.25 * 0.610694143) / 2.5;
+        flg = true;
+        break;
+      // 単色光
+      case 'r':
+        ratio_RGB[0] = 255 * 16.0 / mean_mA_RGB[0];
+        ratio_RGB[1] = 0;
+        ratio_RGB[2] = 0;
+        lightup(100);
+        break;
+      case 'g':
+        ratio_RGB[0] = 0;
+        ratio_RGB[1] = 255 * 15.0 / mean_mA_RGB[1];
+        ratio_RGB[2] = 0;
+        lightup(100);
+        break;
+      case 'b':
+        ratio_RGB[0] = 0;
+        ratio_RGB[1] = 0;
+        ratio_RGB[2] = 255 * 15.0 / mean_mA_RGB[2];
+        lightup(100);
+        break;
+      //2つ目のLEDへの書き込み用
+      case 'G':
+        subratio_GB[0] = 255 * 15.0 / mean_mA_RGB[1];
+        subratio_GB[1] = 0;
+        lightup_sub(100);
+        break;
+      case 'B':
+        subratio_GB[0] = 0;
+        subratio_GB[1] = 255 * 15.0 / mean_mA_RGB[2];
+        lightup_sub(100);
+        break;
+      default:
+        goto DELAY;
+        break;
     }
-    // calculate
-    ratio_RGB[0] = 255 * 16.0 / mean_mA_RGB[0] * (float)i_ratio_input / 20.0;
-    ratio_RGB[1] = 255 * 15.0 / mean_mA_RGB[1] * 5.865873551 / 7.0 * (float)(20 - i_ratio_input) / 20.0;
-    // display
-    sprintf(str, "input char: %c, ratio of R-LED: %d/20", val, i_ratio_input);
-    Serial.println(str);
-    // lightup
-    lightup(100);
+    if (flg) {
+      // calculate
+      ratio_RGB[0] = 255 * 16.0 / mean_mA_RGB[0] * (float)i_ratio_input / 20.0;
+      ratio_RGB[1] = 255 * 15.0 / mean_mA_RGB[1] * 5.865873551 / 7.0 * (float)(20 - i_ratio_input) / 20.0;
+      // display
+      sprintf(str, "input char: %c, ratio of R-LED: %d/20", val, i_ratio_input);
+      Serial.println(str);
+    }
     Serial.println("---input something... (+: increase R-LED ratio, -: decrease R-LED ratio, y: Y-LED mode, w: W-LED mode)---");
-    // clear
-    // while (Serial.available() > 0) {
-    //   char tmp = Serial.read();
-    // }
   }
 DELAY:
   delay(1000);
@@ -201,12 +242,32 @@ void read() {
 }
 
 void lightup(int time_delay) {
+  // calibrate
   for (int i_rgb = 0; i_rgb < 3; ++i_rgb) {
+    if (ratio_RGB[i_rgb] > 255) {
+      ratio_RGB[i_rgb] = 255;
+    }
     // write
     analogWrite(PIN_RGBout[i_rgb], ratio_RGB[i_rgb]);
   }
   // display
   sprintf(str, "ratio of RGB: %d/255 %d/255 %d/255", ratio_RGB[0], ratio_RGB[1], ratio_RGB[2]);
+  Serial.println(str);
+  // prepare for next action
+  delay(time_delay);
+};
+
+void lightup_sub(int time_delay) {
+  // calibrate
+  for (int i_gb = 0; i_gb < 2; ++i_gb) {
+    if (subratio_GB[i_gb] > 255) {
+      subratio_GB[i_gb] = 255;
+    }
+    // write
+    analogWrite(subPIN_GBout[i_gb], subratio_GB[i_gb]);
+  }
+  // display
+  sprintf(str, "ratio of additional GB: %d/255 %d/255", subratio_GB[0], subratio_GB[1]);
   Serial.println(str);
   // prepare for next action
   delay(time_delay);
