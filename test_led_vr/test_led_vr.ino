@@ -192,6 +192,10 @@ void loop() {
         subratio_GB[1] = 255 * 15.0 / mean_mA_RGB[2];
         lightup_sub(100);
         break;
+      case 'C':
+        subratio_GB[0] = 255 * 15.0 / mean_mA_RGB[1] * 5.865873551 / 7.0;
+        subratio_GB[1] = 255 * 15.0 / mean_mA_RGB[2] * (1 * 0.37 / 0.25 * 0.610694143) / 2.5;
+        lightup_sub(100);
       default:
         goto DELAY;
         break;
@@ -203,6 +207,7 @@ void loop() {
       // display
       sprintf(str, "input char: %c, ratio of R-LED: %d/20", val, i_ratio_input);
       Serial.println(str);
+      lightup(100);
     }
     Serial.println("---input something... (+: increase R-LED ratio, -: decrease R-LED ratio, y: Y-LED mode, w: W-LED mode)---");
   }
